@@ -155,15 +155,4 @@ pytest -q
 - Replay buffer returns a list of tuples `(s_t, a_t, s_{t+1}, r_t)`.
 - Training code converts numpy arrays to PyTorch tensors and moves them to `DEVICE`.
 
-## Next steps (optional)
-- I can add a tiny HTML index in `img/` showing thumbnails of generated PNGs after a run.
-- I can refactor modules to import `DEVICE` from `config.py` across the project.
-- Add unit tests for `SimpleReplayBuffer` or CI flow.
-
-If you want any of those, tell me which and I will implement it.
-
----
-Generated/updated by the development assistant to document repository structure and usage.
-
-# q_learning
 
