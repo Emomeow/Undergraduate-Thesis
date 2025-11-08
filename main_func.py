@@ -142,7 +142,7 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
         loss_list += temp_loss_list
         if current_epoch % 10 == 0:
             print("finish one epoch of training ********** " + str(temp_loss_list) + ", current epoch is " + str(current_epoch))
-    #跳出模块
+    # (Optional) Early exit alternative training block (commented out)
     '''
     mdp_agent = MDPAgent(buffer_size=buffer_size, state_representation_size=state_representation_size,
                          action_size=action_size, optimizer_type=optimizer_type,
@@ -171,7 +171,7 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
         if current_epoch % 10 == 0:
             print("finish one epoch of training ********** " + str(temp_loss_list) + ", current epoch is " + str(current_epoch))
     '''
-    #线性拟合
+    # (Optional) linear fitting block for value function (commented out)
     '''
     dist = generate_dist()
     means, err = get_value_mean_err(dist, state_value_function_list, len(loss_list) - 1)
@@ -215,7 +215,7 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
     '''
     end_time = time.time()
     print("running time is " + str(end_time - begin_time) + "s")
-    # 将输出结果画图展示出来
+    # Generate and save all visualization outputs
     plt_accumulate_reward(reward_list=total_accumulated_reward_list, gradient_type=gradient_type)
     plot_loss(loss_list, gradient_type=gradient_type)
     plot_policy_in_env(env=deterministic_env, last_policy_list=policy_list[-1], gradient_type=gradient_type)
@@ -223,12 +223,12 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
                                 gradient_type=gradient_type)
     plot_state_action_value_function(state_action_value_function_list=total_Q_value_list,state_size=deterministic_env.state_size,action_size=deterministic_env.action_size,
                                 gradient_type=gradient_type)
-    #plot_var(value_function_list=state_value_function_list, gradient_type=gradient_type)
+    # plot_var(value_function_list=state_value_function_list, gradient_type=gradient_type)
     
-    #plot_value_change(loss_list=loss_list, value_function_list=state_value_function_list, state_size=deterministic_env.state_size, gradient_type=gradient_type)
+    # plot_value_change(loss_list=loss_list, value_function_list=state_value_function_list, state_size=deterministic_env.state_size, gradient_type=gradient_type)
     
     
-    # 将输出的数据存入pickle中
+    # Persist output data to a pickle file for later inspection
     pickle.dump({"loss_list": loss_list, "policy_list": policy_list},
                 open(CURRENT_PATH + "/../" + gradient_type + "_output_result.pl", "wb"))
 
@@ -257,39 +257,39 @@ if __name__ == "__main__":
 
     ARGS = PARSER.parse_args()
 
-    # 获得超参
+    # Parse hyper-parameters from CLI
     ENV_NAME = ARGS.env_name
-    ACTION_SIZE = ARGS.action_size  # MDP模型中Action Space的大小
-    STATE_REPRESENTATION_SIZE = ARGS.state_representation_size  # 表示MDP模型每个状态的Dense Vector的维度
-    TRAINING_NUM = ARGS.training_num # 每次采样完成后的训练次数
-    EPOCH_NUM = ARGS.epoch_num  # 采样并训练的轮数
+    ACTION_SIZE = ARGS.action_size  # Size of the action space
+    STATE_REPRESENTATION_SIZE = ARGS.state_representation_size  # Dimension of each state's dense feature vector
+    TRAINING_NUM = ARGS.training_num  # Number of training updates per epoch
+    EPOCH_NUM = ARGS.epoch_num  # Number of epochs (sample + train cycles)
 
-    # 用于指示当前一次探索应该采样多少次
+    # Steps per episode (trajectory horizon length)
     HORIZON_LENGTH = ARGS.horizon_size
 
-    OPTIMIZER_TYPE = ARGS.optimizer_type  # 规定优化器类型，现在支持“adam”和“sgd”
+    OPTIMIZER_TYPE = ARGS.optimizer_type  # Optimizer choice (supports 'adam' and 'sgd')
 
-    INIT_LEARNING_RATE = ARGS.init_learning_rate # 规定学习率
-    INIT_VALUE_LIST = ARGS.init_value_list  # 规定
-    VAREPSILON = ARGS.varepsilon  # 规定初始化标准差
+    INIT_LEARNING_RATE = ARGS.init_learning_rate  # Initial learning rate
+    INIT_VALUE_LIST = ARGS.init_value_list  # Optional initial state values for linear fitting
+    VAREPSILON = ARGS.varepsilon  # Small epsilon used in feature initialization
 
-    GAMMA = ARGS.gamma  # 奖励折扣因子
-    RANDOM_SEED = ARGS.random_seed  # 随机种子
+    GAMMA = ARGS.gamma  # Reward discount factor
+    RANDOM_SEED = ARGS.random_seed  # Random seed for reproducibility
 
-    LR_DISCOUNT_EPOCH = ARGS.lr_discount_epoch  # 学习率下降步长
-    LR_DISCOUNT_FACTOR = ARGS.lr_discount_factor  # 学习率下降比例
+    LR_DISCOUNT_EPOCH = ARGS.lr_discount_epoch  # Epoch at which learning rate decays
+    LR_DISCOUNT_FACTOR = ARGS.lr_discount_factor  # Factor by which learning rate decays
 
     BUFFER_SIZE = None
     BATCH_SIZE = None
 
-    for GRADIENT_TYPE in ["semi"]:
+    for GRADIENT_TYPE in ["semi"]:  # Loop over gradient modes (extend list to run multiple variants)
         BUFFER_SIZE, BATCH_SIZE = main_func(action_size=ACTION_SIZE, state_representation_size=STATE_REPRESENTATION_SIZE, epoch_num=EPOCH_NUM,
                   init_learning_rate=INIT_LEARNING_RATE, gamma=GAMMA, optimizer_type=OPTIMIZER_TYPE,
                   horizon_length=HORIZON_LENGTH, training_num=TRAINING_NUM,
                   gradient_type=GRADIENT_TYPE, lr_discount_epoch=LR_DISCOUNT_EPOCH, lr_discount_factor=LR_DISCOUNT_FACTOR,
                   random_seed=RANDOM_SEED, env_name=ENV_NAME, varepsilon=VAREPSILON, init_value_list=INIT_VALUE_LIST)
 
-    # 将传入的超参写入txt中
+    # Persist hyper-parameters to JSON-like text file for reproducibility
     HYPER_PARAM_DICT = {
         "action space size": ACTION_SIZE,
         "state representation size": STATE_REPRESENTATION_SIZE,
