@@ -56,15 +56,32 @@ if (git remote get-url origin 2>$null) {
     git remote add origin $RemoteUrlToUse
 }
 
-# push
-Write-Host "Pushing branch '$branch' to origin (upstream set)..." -ForegroundColor Cyan
-try {
-    git push -u origin $branch
-    Write-Host "Push succeeded." -ForegroundColor Green
-} catch {
-    Write-Host "git push failed. See error below:" -ForegroundColor Red
-    Write-Host $_.Exception.Message
-    Exit 1
+function AttemptPush {
+    param([string]$Branch)
+    Write-Host "Pushing branch '$Branch' to origin (upstream set)..." -ForegroundColor Cyan
+    git push -u origin $Branch
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Push succeeded." -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "Initial push failed (exit code $LASTEXITCODE)." -ForegroundColor Yellow
+        return $false
+    }
 }
+
+if (-not (AttemptPush -Branch $branch)) {
+    # Detect non-fast-forward (behind) and attempt automatic rebase
+    Write-Host "Attempting to auto-resolve non-fast-forward (fetch + rebase) ..." -ForegroundColor Cyan
+    git fetch origin $branch
+    if ($LASTEXITCODE -ne 0) { ExitWith "Fetch failed; resolve manually (check network/permissions)." }
+    # Prefer rebase to keep linear history
+    git pull --rebase origin $branch
+    if ($LASTEXITCODE -ne 0) { ExitWith "Rebase failed; manual conflict resolution required. Run 'git status' and fix conflicts before re-running script." }
+    Write-Host "Rebase completed; retrying push..." -ForegroundColor Cyan
+    if (-not (AttemptPush -Branch $branch)) {
+        ExitWith "Push still failing. Inspect output above; you may need to resolve conflicts or authentication issues." }
+}
+
+Write-Host "If push required authentication, you may be prompted for credentials or to use a PAT. For a smoother flow, consider setting up SSH keys and using the SSH URL." -ForegroundColor Yellow
 
 Write-Host "If push required authentication, you may be prompted for credentials or to use a PAT. For a smoother flow, consider setting up SSH keys and using the SSH URL." -ForegroundColor Yellow
