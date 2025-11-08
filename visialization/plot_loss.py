@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import math
-import numpy as np
+# import numpy as np  # Currently unused
 
 sns.set_theme(style="darkgrid")
 
@@ -34,7 +34,9 @@ def plot_loss(loss_list, gradient_type):
     sns.lineplot(data=df, x="training count", y="loss")
     plt.scatter(x=increase_data_point, y=increase_data_loss, c="r")
     plt.title(gradient_type + "_loss, loss increase count=" + str(increase_count))
-    plt.savefig(CURRENT_PATH + "/../img/" + gradient_type + "_loss.png")
+    out_dir = os.path.join(CURRENT_PATH, "../img")
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(os.path.join(out_dir, f"{gradient_type}_loss.png"))
     plt.close()
 
     data_dict_list = []
@@ -48,7 +50,7 @@ def plot_loss(loss_list, gradient_type):
     df = pd.DataFrame().from_dict(data_dict_list)
     sns.lineplot(data=df, x="training count", y="log scale loss")
     plt.title(gradient_type + "_loss")
-    plt.savefig(CURRENT_PATH + "/../img/" + gradient_type + "_loss_log_scale.png")
+    plt.savefig(os.path.join(out_dir, f"{gradient_type}_loss_log_scale.png"))
     plt.close()
 
 

@@ -1,7 +1,9 @@
 """
-定义强化学习的Agent。强化学习中主要有两大模块：Agent和Environment，但是一般情况我们可以使用已有的环境，所以
+Define the reinforcement learning Agent. In RL, the two main components
+are the Agent and the Environment. This module implements the Agent logic
+and training routines; environments are typically provided separately.
 """
-import copy
+# import copy  # Unused but may be needed for future deep copying
 import torch
 import numpy as np
 from agent.replay_buffer import SimpleReplayBuffer
@@ -19,19 +21,20 @@ DEVICE = torch.device("cuda:0" if USE_CUDA else "cpu")
 class MDPAgent(object):
     def __init__(self, buffer_size, state_representation_size, action_size, optimizer_type,
                  init_learning_rate, gradient_type, lr_discount_factor, lr_discount_epoch, training_num):
-
         self.replay_buffer = SimpleReplayBuffer(buffer_size=buffer_size)
         self.buffer_size = buffer_size
         self.gradient_type = gradient_type
         self.training_num = training_num
 
-        # 如果存在已经训练的模型，则读取模型，否则新建模型
+    # If a trained model exists, load it; otherwise create a new model
         model, optimizer, lr_scheduler = load_model("fcnn_" + gradient_type)
 
         if model is None:
-            self.model = FCNN(input_size=state_representation_size, output_size=action_size).to(DEVICE)
+            self.model = FCNN(input_size=state_representation_size, output_size=action_size)
         else:
-            self.model = model.to(DEVICE)
+            self.model = model
+        # Make sure model is on the correct device
+        self.model = self.model.to(DEVICE)
         #self.target = FCNN(input_size=self.model.input_size, output_size=self.model.output_size)
         #self.target.load_state_dict(self.model.state_dict())
         #self.target.to(DEVICE)
@@ -54,21 +57,29 @@ class MDPAgent(object):
         else:
             self.lr_scheduler = lr_scheduler
 
-        # 记录训练和探索的次数，用于调整learning rate和探索的随机性
+    # Track training and exploration counts to adjust learning rate and exploration randomness
         self.training_count = 0
         self.exploration_count = 0
 
     def get_current_policy_and_value(self, current_state_data, action_data, state_representation):
-
-        state_representation_tensor = torch.tensor(state_representation, device=DEVICE, dtype=torch.float32)
-        current_state_representation_tensor = torch.tensor(current_state_data, device=DEVICE, dtype=torch.float32)
-        action_tensor = torch.tensor(action_data, device=DEVICE, dtype=torch.int64).view(-1, 1)
+        # Convert inputs to numpy arrays first
+        state_rep = np.array(state_representation, dtype=np.float32)
+        current_state = np.array(current_state_data, dtype=np.float32)
+        action_data = np.array(action_data, dtype=np.int64)
+        
+        # Create tensors from numpy arrays
+        state_representation_tensor = torch.from_numpy(state_rep).to(DEVICE)
+        current_state_representation_tensor = torch.from_numpy(current_state).to(DEVICE)
+        action_tensor = torch.from_numpy(action_data).view(-1, 1).to(DEVICE)
+        
+        # Ensure model is on the correct device
+        self.model = self.model.to(DEVICE)
         current_state_value_tensor = self.model(current_state_representation_tensor).gather(1, action_tensor).squeeze(-1)
 
         current_state_value_tensor = current_state_value_tensor.cpu().detach().numpy().tolist()
 
         state_value_tensor = self.model(state_representation_tensor)
-        #固定终点的value
+        # fix terminal state's value (example placeholder)
         '''
         state_value_tensor[1,0] = 1
         state_value_tensor[1,1] = 1
@@ -76,7 +87,7 @@ class MDPAgent(object):
         current_value, current_policy = state_value_tensor.max(1)
         current_action_list = current_policy.cpu().detach().numpy().tolist()
         state_value_function = current_value.cpu().detach().numpy().tolist()
-        Q_value_list = state_value_tensor.cpu().detach().numpy().tolist() 
+        Q_value_list = state_value_tensor.cpu().detach().numpy().tolist()
         #target_value_tensor = self.target(state_representation_tensor)
         #target_value, target_policy = target_value_tensor.max(1)
         #target_action_list = target_policy.cpu().detach().numpy().tolist()

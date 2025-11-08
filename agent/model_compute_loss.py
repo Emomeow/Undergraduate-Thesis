@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 from agent.nn_model import FCNN
@@ -9,65 +10,77 @@ CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
 
 def loss_with_semi_gradient(fcnn_model, optimizer, input_data, device, gamma):
     """
-    本函数用于针对一个模型，一次训练数据，进行一次训练
+    Compute loss for a batch using the semi-gradient TD method.
 
-    本函数使用常用的Semi gradient的方式进行训练。
-
-    :param input_data: 是一个List of Tuple，每个Tuple里面包含的内容有（s_t, a_t, s_t+1, r_t），其维度分别为为
-        s_t: (160, 160, 3) a_t : (3, 1) s_t+1: (160, 160, 3) r_t: (1, )
-    :param simple_cnn_model: 需要训练的模型，已经放到Device上了。这里device指CPU或者GPU。
-    :param optimizer: 当前模型的优化器，需要是全局性的，因为里面可能会包含类似Momentum之类的全局信息
-    :param device:
-    :param gamma: discounted factor
-    :return:
+    :param input_data: list of tuples (s_t, a_t, s_t+1, r_t)
+    :param fcnn_model: model on device
+    :param optimizer: optimizer (unused here but kept for API consistency)
+    :param device: torch device
+    :param gamma: discount factor
+    :return: loss value (float) or None
     """
-    # 将前一次Tensor中的grad清零，以便于后续的运算
+    # Zero gradients from previous step
     optimizer.zero_grad()
 
-    # 获取所有的s_t数据，处理后放到device上
+    # Collect all s_t data and move to device
     current_state_list = []
     for data_tuple in input_data:
-        current_state_list.append(data_tuple[0])
-    current_state_tensor = Variable(torch.tensor(current_state_list, device=device, dtype=torch.float32))
+        # Ensure state is numpy array
+        if isinstance(data_tuple[0], (list, tuple)):
+            state = np.array(data_tuple[0], dtype=np.float32)
+        else:
+            state = data_tuple[0]
+        current_state_list.append(state)
+    # Stack into single numpy array before converting to tensor
+    current_state_array = np.stack(current_state_list)
+    current_state_tensor = torch.from_numpy(current_state_array).to(device)
 
-    # 获取所有的s_t+1数据，并挑选出那些不为final state的状态作为函数的输入
+    # Collect all s_t+1 data and select non-final next states
     non_final_next_state_list = []
     next_state_list = []
     for data_tuple in input_data:
-        next_state_list.append(data_tuple[2])
-        if data_tuple[2] is not None:
-            non_final_next_state_list.append(data_tuple[2])
+        next_state = data_tuple[2]
+        next_state_list.append(next_state)
+        if next_state is not None:
+            # Ensure next_state is numpy array
+            if isinstance(next_state, (list, tuple)):
+                next_state = np.array(next_state, dtype=np.float32)
+            non_final_next_state_list.append(next_state)
 
-    if len(non_final_next_state_list) == 0:  # 将没有数据用于训练时，直接退出
+    if len(non_final_next_state_list) == 0:  # If no non-final states, nothing to train on
         return
 
-    non_final_next_state_tensor = Variable(torch.tensor(non_final_next_state_list, device=device, dtype=torch.float32))
+    # Stack into single numpy array before converting to tensor
+    non_final_next_state_array = np.stack(non_final_next_state_list)
+    non_final_next_state_tensor = torch.from_numpy(non_final_next_state_array).to(device)
 
-    # 获取所有的reward数据
+    # Collect reward data
     reward_list = []
     for data_tuple in input_data:
         reward_list.append(data_tuple[3])
     reward_tensor = Variable(torch.tensor(reward_list, device=device, dtype=torch.float32))
 
-    # 获取所有的action数据
+    # Collect action data
     action_list = []
     for data_tuple in input_data:
         action_list.append(data_tuple[1])
     action_tensor = Variable(torch.tensor(action_list, device=device, dtype=torch.int64)).view(-1, 1)
 
-    # 使用复制的model计算所有的Q(s_t+1, a_t+1)，并且假设在s_t+1为最终的state的时候，Q(s_t+1, a_t+1)=0
+    # Compute Q(s_t+1, a) for non-final states; assume Q=0 for final states
     
     non_final_mask = torch.tensor(
         tuple(map(lambda s: s is not None, next_state_list)), device=device, dtype=torch.bool
     )  # 本函数的意义为筛选出哪些tuple的next state是final state，因为根据假设final state的值为0，最终的值为[True, False,....]
     next_state_action_value = torch.ones(len(input_data), device=device)
-    next_s_a_value = torch.ones(len(input_data), device=device)
+    # Debug/monitoring variable (uncomment if needed for analysis)
+    # next_s_a_value = torch.ones(len(input_data), device=device)
     # 获取maximum state action value，并将为Non-final的state value赋值
     next_state_action_value[non_final_mask] = fcnn_model(non_final_next_state_tensor).detach().max(1)[0]
-    # 使用原始的model计算所有的Q(s_t, a_t)，并且按照选择的action，将对应的action value选出来
+    # Compute Q(s_t, a_t) and select values for chosen actions
     current_state_action_value_raw = fcnn_model(current_state_tensor)
     current_state_action_value = current_state_action_value_raw.gather(1, action_tensor)
-    current_state_value = current_state_action_value_raw.max(1)[0]
+    # Debug/monitoring variable (uncomment if needed for analysis)
+    # current_state_value = current_state_action_value_raw.max(1)[0]
     '''
     dist = [[5,7],[2,4,6],[1,3]]
     k = Variable(torch.tensor(0, device=device, dtype=torch.float32))
@@ -75,8 +88,7 @@ def loss_with_semi_gradient(fcnn_model, optimizer, input_data, device, gamma):
         b = torch.index_select(current_state_value, dim=0, index=torch.tensor(dist[i]).to(device))
         k.add_(torch.var(b))
     '''
-    # 给两个model分别设置一个Loss Function，将Model1的输出detach，当做Model2的label，计算Loss和Gradient，
-    # 将Model2的输出detach，当做Model1的label，计算Loss和True Gradient
+    # Use MSE between current Q and (reward + gamma * next_Q) as the loss
     criterion = nn.MSELoss()
     loss = criterion(current_state_action_value, (reward_tensor + gamma * next_state_action_value).view(-1, 1)) # 以current state value作为学习对象  # 计算gradient
     # 对当前的模型进行优化
@@ -87,20 +99,20 @@ def loss_with_semi_gradient(fcnn_model, optimizer, input_data, device, gamma):
 
 def loss_with_true_gradient(fcnn_model, optimizer, input_data, device, gamma):
     """
-    本函数用于针对一个模型，一次训练数据，进行一次训练。本函数使用Bellman Error的True Gradient进行训练
+    Train a model on one batch using the true gradient of the Bellman error.
 
-    :param input_data: 是一个List of Tuple，每个Tuple里面包含的内容有（s_t, a_t, s_t+1, r_t），其维度分别为为
-        s_t: (160, 160, 3) a_t : (3, 1) s_t+1: (160, 160, 3) r_t: (1, )
-    :param fcnn_model: 需要训练的模型，已经放到Device上了。这里device指CPU或者GPU。
-    :param optimizer: 当前模型的优化器，需要是全局性的，因为里面可能会包含类似Momentum之类的全局信息
-    :param device:
-    :param gamma: Discount Factor，期望奖励的折扣因子
-    :return:
+    :param input_data: list of tuples (s_t, a_t, s_t+1, r_t). Example shapes:
+        s_t: (feature_dim,), a_t: scalar, s_t+1: (feature_dim,), r_t: scalar
+    :param fcnn_model: model to train (already moved to `device`).
+    :param optimizer: optimizer for the model (may contain global state like momentum).
+    :param device: torch device (cpu or cuda).
+    :param gamma: discount factor.
+    :return: loss value (float) or None
     """
-    # 将前一次Tensor中的grad清零，以便于后续的运算
+    # Zero gradients from the previous step
     optimizer.zero_grad()
 
-    # 将model复制一份,用于之后的计算
+    # Duplicate the model for later computation (used as a frozen reference)
     duplicated_model = FCNN(input_size=fcnn_model.input_size, output_size=fcnn_model.output_size)
     duplicated_model.load_state_dict(fcnn_model.state_dict())
     duplicated_model.to(device)
@@ -111,7 +123,7 @@ def loss_with_true_gradient(fcnn_model, optimizer, input_data, device, gamma):
         current_state_list.append(data_tuple[0])
     current_state_tensor = Variable(torch.tensor(current_state_list, device=device, dtype=torch.float32))
 
-    # 获取所有的s_t+1数据，并挑选出那些不为final state的状态作为函数的输入
+    # Collect all s_t+1 data and select non-final next states
     non_final_next_state_list = []
     next_state_list = []
     for data_tuple in input_data:
@@ -125,19 +137,19 @@ def loss_with_true_gradient(fcnn_model, optimizer, input_data, device, gamma):
     non_final_next_state_tensor = Variable(torch.tensor(
         non_final_next_state_list, device=device, dtype=torch.float32))
 
-    # 获取所有的reward数据
+    # Collect reward data
     reward_list = []
     for data_tuple in input_data:
         reward_list.append(data_tuple[3])
     reward_tensor = Variable(torch.tensor(reward_list, device=device, dtype=torch.float32))
 
-    # 获取所有的action数据
+    # Collect action data
     action_list = []
     for data_tuple in input_data:
         action_list.append(data_tuple[1])
     action_tensor = Variable(torch.tensor(action_list, device=device, dtype=torch.int64)).view(-1, 1)
 
-    # 使用原始的model计算所有的Q(s_t, a_t)，并且按照选择的action，将对应的action value选出来
+    # Use the original model to compute Q(s_t, a_t) and select values for chosen actions
     current_state_action_value_raw = fcnn_model(current_state_tensor)
     current_state_action_value = current_state_action_value_raw.gather(1, action_tensor)
     current_state_value = current_state_action_value_raw.max(1)[0]
@@ -146,35 +158,33 @@ def loss_with_true_gradient(fcnn_model, optimizer, input_data, device, gamma):
     for i in range(len(dist)):
         b = torch.index_select(current_state_value, dim=0, index=torch.tensor(dist[i]).to(device))
         k.add_(torch.var(b))
-    # 使用复制的model计算所有的Q(s_t+1, a_t+1)，并且假设在s_t+1为最终的state的时候，Q(s_t+1, a_t+1)=0
+    # Use the duplicated model to compute Q(s_t+1, a) for non-final next states.
+    # For final next states, Q is assumed to be 0.
     non_final_mask = torch.tensor(
         tuple(map(lambda s: s is not None, next_state_list)), device=device, dtype=torch.bool
     )  # 本函数的意义为筛选出哪些tuple的next state是final state，因为根据假设final state的值为0，最终的值为[True, False,....]
     next_state_action_value = torch.zeros(len(input_data), device=device)
     next_state_action_value[non_final_mask] = duplicated_model(
-        non_final_next_state_tensor).max(1)[0]  # 获取maximum state action value，并将为Non-final的state value赋值
+        non_final_next_state_tensor).max(1)[0]  # get max state-action value for non-final states
 
-    # 给两个model分别设置一个Loss Function，将Model1的输出detach，当做Model2的label，计算Loss和Gradient，
-    # 将Model2的输出detach，当做Model1的label，计算Loss和True Gradient
-    # 这里计算 [f(x1) - (r + a * v(x2))]^2的loss和gradient
+    # Set up two loss functions using detached targets to compute a true Bellman gradient:
+    # loss1: [f(x1) - (r + gamma * v(x2))]^2 where v(x2) is detached
+    # loss2: [gamma * f(x2) - (-r + v(x1))]^2 where v(x1) is detached
     criterion1 = nn.MSELoss()
     target1 = reward_tensor + gamma * next_state_action_value.detach()
     loss1 = criterion1(current_state_action_value.squeeze(-1),
                        target1) # 以current state value作为学习对象 
     # 计算gradient
 
-    # 这里计算[a * f(x2) - ( -r + v(x1) )]^2的loss和gradient
+    # loss computed for the duplicated-model side
     criterion2 = nn.MSELoss()
     target2 = - reward_tensor + current_state_action_value.detach().squeeze(-1)
     loss2 = criterion2(gamma * next_state_action_value,
                        target2)  # 以next state value function作为学习对象
     # 计算gradient
 
-    # 对原来Model中的每一个Parameter（Tensor），进行Gradient的修改，获得Temporal Difference Error的真正的gradient
-    # 表示为 [f(x1) - r - a * v(x2)]grad(f(x1)) + [a * f(x2) - ( -r + v(x1) )]grad(f(x2))
-    # = [v(x1) - r - a * v(x2)]*[grad(f(x1)) - grad(f(x2))]
-    #for param1, param2 in zip(fcnn_model.parameters(), duplicated_model.parameters()):
-        #param1.grad += param2.grad
+    # Theoretical note: one could combine gradients from both models to get the true TD gradient.
+    # (The loop below is intentionally commented out; adjust if you want to directly mix grads.)
 
     # 对当前的模型进行优化
 

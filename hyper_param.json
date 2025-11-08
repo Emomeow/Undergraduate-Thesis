@@ -1,0 +1,21 @@
+{
+    "action space size": 2,
+    "state representation size": 3,
+    "horizon length": 20,
+    "gamma": 0.9,
+    "optimizer type": "sgd",
+    "initial learning rate": 0.01,
+    "training number in each epoch": 1,
+    "exploration number": 5000,
+    "learning rate discount epoch": 3000,
+    "learning rate discount factor": 1,
+    "random seed": 110,
+    "buffer size": 4,
+    "batch size": 4,
+    "varepsilon": 0.05,
+    "init_value_list": [
+        1,
+        1,
+        1
+    ]
+}

@@ -1,16 +1,20 @@
-import os
-import imageio
-import shutil
+# import imageio  # Currently unused
+# import imageio  # Currently unused
+# import shutil  # Currently unused
 import math
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.pylab as pl
-from itertools import product
-from datetime import datetime
+# import matplotlib.pylab as pl  # Currently unused
+# from itertools import product  # Currently unused
+# from datetime import datetime  # Currently unused
+
+import os
 
 CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
+OUT_DIR = os.path.join(CURRENT_PATH, "../img")
+os.makedirs(OUT_DIR, exist_ok=True)
 
 def generate_dist():
     dist = []
@@ -21,7 +25,7 @@ def generate_dist():
     dist.append([0])
     return dist
 
-#得到按不同距离分类的价值函数并计算均值与振幅
+# Get value functions grouped by distance, then compute mean and variance
 def get_value_mean_err(dist, value_function_list, index):
     value = []
     means = []
@@ -36,13 +40,13 @@ def get_value_mean_err(dist, value_function_list, index):
 
 def plot_value_change(loss_list, value_function_list, state_size, gradient_type):
     dist = generate_dist()
-    #得到前期的增长点，并把第一个与最后一个列为phase
+    # Find early growth points and treat the first and last as phases
     means, err = get_value_mean_err(dist, value_function_list, len(loss_list) - 1)
     x = range(len(dist))
     plt.errorbar(x, means, yerr = err)
     #plt.legend(bbox_to_anchor=(1.05, 1.45), ncol=int(state_size/3))
     plt.title(gradient_type + "_mean_temporal_difference")
-    plt.savefig(CURRENT_PATH + "/../img/" + gradient_type + "_value_change_for_each_state.png", bbox_inches='tight', pad_inches=1)
+    plt.savefig(os.path.join(OUT_DIR, f"{gradient_type}_value_change_for_each_state.png"), bbox_inches='tight', pad_inches=1)
     plt.close()
 
 
@@ -67,12 +71,12 @@ def plot_var(value_function_list, gradient_type):
     df = pd.DataFrame().from_dict(data_dict_list)
     sns.lineplot(data=df, x="training count", y="kappa")
     plt.title(gradient_type + "_kappa_change")
-    plt.savefig(CURRENT_PATH + "/../img/" + gradient_type + "_var_change.png", bbox_inches='tight', pad_inches=1)
+    plt.savefig(os.path.join(OUT_DIR, f"{gradient_type}_var_change.png"), bbox_inches='tight', pad_inches=1)
     plt.close()
     
     sns.lineplot(data=df, x="training count", y="kappa_log_scale")
     plt.title(gradient_type + "_kappa_change_log_scale")
-    plt.savefig(CURRENT_PATH + "/../img/" + gradient_type + "_var_change_log_scale.png", bbox_inches='tight', pad_inches=1)
+    plt.savefig(os.path.join(OUT_DIR, f"{gradient_type}_var_change_log_scale.png"), bbox_inches='tight', pad_inches=1)
     plt.close()
     
     

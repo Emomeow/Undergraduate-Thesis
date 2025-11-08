@@ -1,5 +1,5 @@
 """
-本文件用于将Environment和Agent两个模块串联起来并且训练Agent
+This script connects the Environment and Agent modules and trains the agent.
 """
 import os
 import json
@@ -16,10 +16,11 @@ from visialization.plot_policies import plot_policy_in_env
 from visialization.plot_value_function import plot_current_value_function
 from visialization.plot_value_function import plot_state_action_value_function
 from visialization.plot_accumulate_reward import plt_accumulate_reward
-from visialization.plot_value_change import plot_value_change
-from visialization.plot_value_change import plot_var
-from visialization.plot_value_change import generate_dist
-from visialization.plot_value_change import get_value_mean_err
+# Commented out unused imports (may be used indirectly - restore if needed):
+# from visialization.plot_value_change import plot_value_change
+# from visialization.plot_value_change import plot_var
+# from visialization.plot_value_change import generate_dist
+# from visialization.plot_value_change import get_value_mean_err
 
 CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -39,16 +40,16 @@ def setup_seed(seed):
 def main_func(action_size, state_representation_size, horizon_length, gamma, optimizer_type,
               init_learning_rate, training_num, epoch_num, gradient_type,
               lr_discount_factor, lr_discount_epoch, random_seed, env_name, init_value_list, varepsilon):
-    # 控制模型的初始化
+    # initialize randomness / seeds
     setup_seed(random_seed)
 
-    # 根据模型的名称选择超参数
+    # select environment class by name
     if env_name == "env_simple":
         env_class = DeterministicMDPSimple
     else:
         raise Exception("")
 
-    # 从给定文件夹内读取已有的MDP环境
+    # construct the MDP environment
     deterministic_env = env_class(state_representation_size=state_representation_size, max_step=horizon_length,
                                   state_representation_random_seed=random_seed, varepsilon=varepsilon)
 
@@ -60,23 +61,30 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
     current_state_list = []
     termination_set_none = False
     for data in training_data:
-        current_state_list.append(data[0])
+        # Convert states to numpy arrays if they aren't already
+        current_state = np.array(data[0], dtype=np.float32) if not isinstance(data[0], np.ndarray) else data[0].astype(np.float32)
+        next_state = np.array(data[2], dtype=np.float32) if data[2] is not None and not isinstance(data[2], np.ndarray) else data[2]
+        if next_state is not None:
+            next_state = next_state.astype(np.float32)
+            
+        current_state_list.append(current_state)
         action_list.append(data[1])
-        next_state_list.append(data[2])
+        next_state_list.append(next_state)
         reward_list.append(data[3])
+        
         if termination_set_none is False:
-            training_data_dict_list.append({"current_state": data[0], "next_state": data[2],
+            training_data_dict_list.append({"current_state": current_state, "next_state": next_state,
                                             "current_action": data[1], "reward": data[3]})
         else:
             if data[4] is False:
-                training_data_dict_list.append({"current_state": data[0], "next_state": data[2],
+                training_data_dict_list.append({"current_state": current_state, "next_state": next_state,
                                             "current_action": data[1], "reward": data[3]})
             else:
-                training_data_dict_list.append({"current_state": data[0], "next_state": None,
+                training_data_dict_list.append({"current_state": current_state, "next_state": None,
                                             "current_action": data[1], "reward": data[3]})
 
-    # state_index_dict = deterministic_env.get_state_next_state_index_dict()  # 用于展示函数拟合Reward Function
-    # reward_function = deterministic_env.get_reward_function()  # 获取每个点的reward
+    # state_index_dict = deterministic_env.get_state_next_state_index_dict()  # for visualizing fitted reward function
+    # reward_function = deterministic_env.get_reward_function()  # get reward per state
 
     loss_list = []
     policy_list = []
@@ -85,7 +93,7 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
     target_policy_list = []
     target_value_function_list = []
     total_Q_value_list = []
-    #调整batch大小
+    # adjust batch size
     buffer_size = len(training_data)
     batch_size = len(training_data)
 
@@ -96,13 +104,13 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
                          training_num=training_num)
     mdp_agent.replay_buffer.insert_data_tuple_list(training_data_dict_list)
 
-    # 根据给定的state value来计算线性参数初始值应该是多少
+    # compute linear parameter initialization from given state values (optional)
     '''
     solved_theta = np.linalg.solve(deterministic_env.state_representation, init_value_list)
     theta = [solved_theta.tolist(), solved_theta.tolist()]
     mdp_agent.model.get_initialization(theta1=theta)
     '''
-    #自定义参数初始化
+    # custom parameter initialization
     
     theta1 = np.random.normal(loc = 0, scale = 0.1, size=(100,3))
     theta2 = np.random.normal(loc = 0, scale = 0.1, size=(2,100))
@@ -232,20 +240,20 @@ def main_func(action_size, state_representation_size, horizon_length, gamma, opt
 if __name__ == "__main__":
 
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--env-name", type=str, default='env_simple', help="环境名称")
-    PARSER.add_argument("--action-size", type=int, default=2, help="MDP模型中Action Space的大小")
-    PARSER.add_argument("--state-representation-size", default=3, type=int, help="表示MDP模型每个状态的Dense Vector的维度")
-    PARSER.add_argument("--training-num", type=int, default=1, help="每次采样完成后的训练次数")
-    PARSER.add_argument("--epoch-num", type=int, default=5000, help="采样并训练的轮数")
-    PARSER.add_argument("--horizon_size", type=int, default=20, help="用于指示当前一次探索应该采样多少次")
-    PARSER.add_argument("--optimizer-type", type=str, default='sgd', help="规定优化器类型，现在支持“adam”和“SGD”")
-    PARSER.add_argument("--init-learning-rate", type=float, default=0.01, help="规定初始学习率")
-    PARSER.add_argument("--gamma", type=float, default=0.9, help="奖励折扣因子")
-    PARSER.add_argument("--lr-discount-epoch", type=float, default=3000, help="学习率下降步数")
-    PARSER.add_argument("--lr-discount-factor", type=float, default=1, help="学习率下降折扣数")
-    PARSER.add_argument("--random-seed", type=int, default=110, help="随机种子")
-    PARSER.add_argument("--init-value-list", type=json.loads, default='[1,1,1]', help="线性拟合初始化参数")
-    PARSER.add_argument("--varepsilon", type=float, default=0.05, help="feature表示的小误差")
+    PARSER.add_argument("--env-name", type=str, default='env_simple', help="environment name")
+    PARSER.add_argument("--action-size", type=int, default=2, help="size of the action space in the MDP")
+    PARSER.add_argument("--state-representation-size", default=3, type=int, help="dimension of dense state vectors")
+    PARSER.add_argument("--training-num", type=int, default=1, help="training iterations after each sampling")
+    PARSER.add_argument("--epoch-num", type=int, default=5000, help="number of sampling/training epochs")
+    PARSER.add_argument("--horizon_size", type=int, default=20, help="number of steps per episode")
+    PARSER.add_argument("--optimizer-type", type=str, default='sgd', help="optimizer type (supports 'adam' and 'sgd')")
+    PARSER.add_argument("--init-learning-rate", type=float, default=0.01, help="initial learning rate")
+    PARSER.add_argument("--gamma", type=float, default=0.9, help="discount factor for rewards")
+    PARSER.add_argument("--lr-discount-epoch", type=float, default=3000, help="learning rate decay steps")
+    PARSER.add_argument("--lr-discount-factor", type=float, default=1, help="learning rate decay factor")
+    PARSER.add_argument("--random-seed", type=int, default=110, help="random seed")
+    PARSER.add_argument("--init-value-list", type=json.loads, default='[1,1,1]', help="initial values for linear fitting")
+    PARSER.add_argument("--varepsilon", type=float, default=0.05, help="small epsilon used in feature representation")
 
     ARGS = PARSER.parse_args()
 
