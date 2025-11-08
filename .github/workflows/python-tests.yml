@@ -13,8 +13,8 @@ jobs:
       matrix:
         python-version: ['3.8', '3.9', '3.10']
 
-    steps:
-    - uses: actions/checkout@v3
+  steps:
+  - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -36,11 +36,12 @@ jobs:
       run: |
         pytest tests/test_smoke.py -v
       
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
+    - name: Upload test results (cache artifacts)
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: pytest-results-${{ matrix.python-version }}
         path: |
           .pytest_cache
           img/*.png
+        retention-days: 7
