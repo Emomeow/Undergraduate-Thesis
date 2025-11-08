@@ -290,7 +290,6 @@ class DeterministicMDPSimple(gym.Env):
             data = pygame.surfarray.array3d(self.viewer)
             return data
         return None
-        return self.viewer.render(return_rgb_array=return_rgb_array_flag)
 
     def brute_force_solver(self, gamma, computing_period):
         """
