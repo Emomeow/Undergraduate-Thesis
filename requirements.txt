@@ -1,0 +1,21 @@
+# Core
+numpy>=1.23
+pandas>=1.5
+matplotlib>=3.6
+seaborn>=0.12
+
+# ML / DL
+torch>=2.0
+
+# RL / Env
+# gymnasium can be heavy; used for interfaces only here
+# Pin minor to avoid API breakage in CI; adjust if needed
+gymnasium>=0.28,<0.30
+pymdptoolbox>=4.0b3
+
+# Visualization / headless
+# Use the headless OpenCV build to avoid system GUI deps in CI
+opencv-python-headless>=4.8
+
+# Optional (rendering); guarded so CI doesn't require SDL windowing
+pygame>=2.3
